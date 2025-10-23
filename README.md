@@ -1,45 +1,57 @@
-## Directadmin Restic Backup using S3 Block Storage
+## DirectAdmin Restic Backup using S3 Block Storage
 
 # Requirements
-* `restic >=v0.9.6`
-* `zstd:  for mysql backups`
+* `restic` (latest stable version recommended, minimum v0.9.6)
+* `zstd` for MySQL backups
+* `git` for installation
 
 ## Required: Install Restic
 
 [restic](https://restic.net/) is a command-line tool for making backups.
 
-Ubuntu:
+Ubuntu/Debian:
 ```bash
-$ apt-get install restic && apt-get install git
+sudo apt-get update
+sudo apt-get install -y restic zstd git
+```
 
-sudo apt-get update && sudo apt-get install -y software-properties-common && sudo add-apt-repository -y ppa:copart/restic && sudo apt-get update && sudo apt-get install -y restic git
-````
-
-CentOS:
+CentOS/RHEL:
 ```bash
-$ yum install yum-plugin-copr && yum copr enable copart/restic && yum install restic && yum install git
+sudo yum install -y epel-release
+sudo yum install -y restic zstd git
+```
 
-sudo apt-get update && sudo apt-get install -y software-properties-common && sudo add-apt-repository -y ppa:copart/restic && sudo apt-get update && sudo apt-get install -y restic git
-````
+For the latest version, you can download from the [official releases page](https://github.com/restic/restic/releases).
 
-## Installguide Directadmin VPS Backup
+## Installation Guide for DirectAdmin VPS Backup
 
-Tip: The steps in this section will instruct you to copy files from this repo to system directories.
+The following steps will install the backup scripts and configuration files to system directories.
 
 ```bash
-$ git clone https://github.com/payrequestio/directadmin-vps-backup.git
-$ cd directadmin-vps-backup
-$ sudo make install
-````
+git clone https://github.com/payrequestio/directadmin-restic-backup.git
+cd directadmin-restic-backup
+sudo make install
+```
 
 
 ### 1. Configure S3 credentials
-Put these files in `/etc/restic/`:
-* `env.sh`: Fill this file out with your S3 bucket settings. The reason for putting these in a separate file is that it can be used also for you to simply source, when you want to issue some restic commands. For example:
+Edit `/etc/restic/env.sh` with your S3 bucket settings. The installation will create this file from the template if it doesn't exist.
+
+Required configuration:
+* `AWS_ACCESS_KEY_ID`: Your S3 access key
+* `AWS_SECRET_ACCESS_KEY`: Your S3 secret key
+* `RESTIC_PASSWORD`: Password for encrypting backups
+* `RESTIC_REPOSITORY`: S3 repository URL (e.g., `s3:https://s3.amazonaws.com/your-bucket-name`)
+
+Optional configuration:
+* `BACKUP_EMAIL`: Email address for backup notifications (used by restic_backup.sh)
+* `DISCORD_WEBHOOK`: Discord webhook URL for notifications (used by directadmin-vps-backup.sh)
+
+Once configured, you can source the file to use restic commands easily:
 ```bash
-$ source /etc/restic/env.sh
-$ restic snapshots    # You don't have to supply all parameters like --repo, as they are now in your environment!
-````
+source /etc/restic/env.sh
+restic snapshots    # You don't have to supply all parameters like --repo, as they are now in your environment!
+```
 
 ### 2. Initialize remote repo
 Now we must initialize the repository on the remote end:
@@ -47,59 +59,80 @@ Now we must initialize the repository on the remote end:
 source /etc/restic/env.sh && restic init
 ```
 
-### 3. Script for doing the backup
-Put this file in `/usr/local/sbin`:
-* `directadmin-vps-backup.sh`: A script that defines how to run the backup. Edit this file to respect your needs in terms of backup which paths to backup, retention (number of backups to save), etc.
+### 3. Configure backup settings
+The installation places these files:
+* `/usr/local/sbin/directadmin-vps-backup.sh`: Main backup script. Edit this to customize:
+  - Backup paths (default: `/`, `/boot`, `/home`)
+  - Retention policy (default: 7 days, 4 weeks, 3 months, 0 years)
+  - Discord notifications
+* `/etc/restic/backup_exclude`: File patterns to exclude from backups (cache, logs, temporary files, etc.)
 
-Put this file in `/`:
-* `.backup_exclude`: A list of file pattern paths to exclude from you backups, files that just occupy storage space, backup-time, network and money.
+You can also create per-user exclusion files at `$HOME/.backup_exclude` for each user.
 
 
-### 4. Make first backup & verify
-Now see if the backup itself works, by running
+### 4. Run first backup & verify
+Test the backup to ensure everything works:
 
 ```bash
-$ /usr/local/sbin/directadmin-vps-backup.sh
-$ restic snapshots
-````
-
-### 5. Backup automatically; systemd service + timer
-Now we can do the modern version of a cron-job, a systemd service + timer, to run the backup every day!
-
-
-Put these files in `/etc/systemd/system/`:
-* `directadmin-vps-backup.service`: A service that calls the backup script.
-* `directadmin-vps-backup.timer`: A timer that starts the backup every day.
-
-
-Now simply enable the timer with:
-```bash
-$ systemctl start directadmin-vps-backup.timer
-$ systemctl enable directadmin-vps-backup.timer
-````
-
-You can see when your next backup is scheduled to run with
-```bash
-$ systemctl list-timers | grep directadmin-vps-backup
+/usr/local/sbin/directadmin-vps-backup.sh
+source /etc/restic/env.sh
+restic snapshots
 ```
 
-and see the status of a currently running backup with
+### 5. Enable automatic backups with systemd
+The installation includes systemd service and timer units:
+* `directadmin-vps-backup.service`: Service that executes the backup script
+* `directadmin-vps-backup.timer`: Timer that runs backups daily
+* `directadmin-vps-backup-check.service`: Service for checking backup integrity
+* `directadmin-vps-backup-check.timer`: Timer that runs checks monthly
 
+Enable and start the backup timer:
 ```bash
-$ systemctl status directadmin-vps-backup
+systemctl daemon-reload
+systemctl enable --now directadmin-vps-backup.timer
+systemctl enable --now directadmin-vps-backup-check.timer
 ```
 
-or start a backup manually
+### 6. Managing backups
 
+View scheduled backup times:
 ```bash
-$ systemctl start directadmin-vps-backup
+systemctl list-timers | grep directadmin-vps-backup
 ```
 
-You can follow the backup stdout output live as backup is running with:
-
+Check backup status:
 ```bash
-$ journalctl -f -u directadmin-vps-backup.service
-````
+systemctl status directadmin-vps-backup
+```
 
-(skip `-f` to see all backups that has run)
+Start a backup manually:
+```bash
+systemctl start directadmin-vps-backup
+```
+
+View backup logs in real-time:
+```bash
+journalctl -f -u directadmin-vps-backup.service
+```
+
+View all backup logs:
+```bash
+journalctl -u directadmin-vps-backup.service
+```
+
+## Additional Scripts
+
+This repository includes additional helper scripts:
+* `restic_backup.sh`: Alternative backup script with email notifications
+* `restic_check.sh`: Repository integrity check script
+* `mysql.sh`: MySQL database backup script (dumps to `/home/mysqlbackups` with zstd compression)
+
+## Troubleshooting
+
+If you encounter issues:
+1. Check that restic is properly installed: `restic version`
+2. Verify your S3 credentials in `/etc/restic/env.sh`
+3. Test repository access: `source /etc/restic/env.sh && restic snapshots`
+4. Review service logs: `journalctl -u directadmin-vps-backup.service`
+5. Ensure sufficient disk space for MySQL dumps and temporary files
 

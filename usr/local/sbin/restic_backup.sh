@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+# Backup script using restic
+# This script is typically run by: /etc/systemd/system/directadmin-vps-backup.{service,timer}
 
 # Set all environment variables like
 # B2_ACCOUNT_ID, B2_ACCOUNT_KEY, RESTIC_REPOSITORY etc.
@@ -23,7 +26,7 @@ wait $!
 restic backup \
         --verbose \
         --one-file-system \
-        --tag $BACKUP_TAG \
+        --tag "$BACKUP_TAG" \
         $BACKUP_EXCLUDES \
         $BACKUP_PATHS &
 wait $!
@@ -33,13 +36,13 @@ wait $!
 # --group-by only the tag and path, and not by hostname. This is because I create a B2 Bucket per host, and if this hostname accidentially change some time, there would now be multiple backup sets.
 restic forget \
         --verbose \
-        --tag $BACKUP_TAG \
+        --tag "$BACKUP_TAG" \
         --prune \
         --group-by "paths,tags" \
-        --keep-daily $RETENTION_DAYS \
-        --keep-weekly $RETENTION_WEEKS \
-        --keep-monthly $RETENTION_MONTHS \
-        --keep-yearly $RETENTION_YEARS &
+        --keep-daily "$RETENTION_DAYS" \
+        --keep-weekly "$RETENTION_WEEKS" \
+        --keep-monthly "$RETENTION_MONTHS" \
+        --keep-yearly "$RETENTION_YEARS" &
 wait $!
 
 # Check repository for errors.
@@ -47,6 +50,10 @@ wait $!
 #restic check &
 #wait $!
 
-RESTICOUTPUT=`restic snapshots --repo ${RESTIC_REPOSITORY}`
-HOSTNAME=`hostname`
-echo "Backup ${HOSTNAME} has finished, we keep ${RETENTION_DAYS} each day. \n ${RESTICOUTPUT}" | mail -s "Backup done ${HOSTNAME}" geertjan@hostingwalk.com
+RESTICOUTPUT=$(restic snapshots --repo "${RESTIC_REPOSITORY}")
+HOSTNAME=$(hostname)
+# Configure email recipient in env.sh by setting BACKUP_EMAIL variable
+# Example: export BACKUP_EMAIL="admin@example.com"
+if [ -n "${BACKUP_EMAIL:-}" ]; then
+    printf "Backup %s has finished, we keep %s each day.\n\n%s" "${HOSTNAME}" "${RETENTION_DAYS}" "${RESTICOUTPUT}" | mail -s "Backup done ${HOSTNAME}" "${BACKUP_EMAIL}"
+fi
