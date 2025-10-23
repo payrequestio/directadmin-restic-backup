@@ -16,7 +16,7 @@ exit_hook() {
 trap exit_hook INT TERM
 
 
-source /etc/restic/b2_env.sh
+source /etc/restic/env.sh
 
 # How many network connections to set up to B2. Default is 5.
 B2_CONNECTIONS=50

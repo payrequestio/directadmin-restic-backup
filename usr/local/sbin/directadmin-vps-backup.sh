@@ -5,11 +5,10 @@
 bash /usr/local/sbin/directadmin-cleaner.sh &
 wait $!
 
-## add your discord channel webhook
-discord="URL"
+## add your discord channel webhook (or set DISCORD_WEBHOOK in env.sh)
+discord="${DISCORD_WEBHOOK:-URL}"
 
 # Check available disk space
-total_space=$(df -H | awk '{if($NF=="/") print $2}' | tr -d 'G')
 free_space=$(df -H | awk '{if($NF=="/") print $4}' | tr -d 'G')
 required_space=$(du -sh /var/lib/mysql | tr -d 'G' | awk '{print $1}')
 if (( $(echo "$free_space < $required_space" | bc -l) )); then
@@ -106,9 +105,8 @@ wait $!
 #wait $!
 
 RESTICSNAPSHOTS="restic snapshots --no-lock --json --repo ${RESTIC_REPOSITORY}"
-RESTICOUTPUT=$(eval "$RESTICSNAPSHOTS" | grep -oP '"short_id":"\K[0-9a-f]+|"time":"\K[^"]+' | paste -d' ' - - | sed 's/T/ /; s/\.\(.*\)Z/\1/' )
-COUNT=$(restic snapshots --compact --repo ${RESTIC_REPOSITORY} | awk -F '\t' '{print $1}' | wc -l)
-HOSTNAME=`hostname`
+COUNT=$(restic snapshots --compact --repo "${RESTIC_REPOSITORY}" | awk -F '\t' '{print $1}' | wc -l)
+HOSTNAME=$(hostname)
 
 
 
