@@ -1,15 +1,14 @@
 # Source: https://serverfault.com/questions/876233/how-to-send-an-email-if-a-systemd-service-is-restarted
 # Source: https://wiki.archlinux.org/index.php/Systemd/Timers#MAILTO
 #
-# NOTE: Replace 'admin@example.com' with your actual email address
-# or set SYSTEMD_EMAIL environment variable in /etc/restic/env.sh
+# NOTE: Set SYSTEMD_EMAIL environment variable in /etc/restic/env.sh
+# or the default admin@example.com will be used
 
 [Unit]
 Description=Send status email for %i to user
 
 [Service]
 Type=oneshot
-EnvironmentFile=-/etc/restic/env.sh
-ExecStart=/usr/local/sbin/systemd-email ${SYSTEMD_EMAIL:-admin@example.com} %i
+ExecStart=/usr/local/sbin/systemd-email-wrapper.sh %i
 User=root
 Group=systemd-journal
