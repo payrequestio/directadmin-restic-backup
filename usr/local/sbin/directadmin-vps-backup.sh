@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Make backup my system with restic
 
-# Run first Directadmin Cleaner
-bash /usr/local/sbin/directadmin-cleaner.sh &
-wait $!
+# Run first Directadmin Cleaner (optional - create this script if you need cleanup before backup)
+if [ -f /usr/local/sbin/directadmin-cleaner.sh ]; then
+    bash /usr/local/sbin/directadmin-cleaner.sh &
+    wait $!
+fi
 
 ## add your discord channel webhook (or set DISCORD_WEBHOOK in env.sh)
 discord="${DISCORD_WEBHOOK:-URL}"
@@ -104,7 +106,6 @@ wait $!
 #restic check &
 #wait $!
 
-RESTICSNAPSHOTS="restic snapshots --no-lock --json --repo ${RESTIC_REPOSITORY}"
 COUNT=$(restic snapshots --compact --repo "${RESTIC_REPOSITORY}" | awk -F '\t' '{print $1}' | wc -l)
 HOSTNAME=$(hostname)
 
