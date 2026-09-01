@@ -3,7 +3,7 @@
 
 ### Macros ###
 SRCS_SCRIPTS	= $(filter-out %cron_mail, $(wildcard usr/local/sbin/*))
-SRCS_CONF	= $(filter-out %template, $(wildcard etc/restic/*))
+SRCS_CONF	= $(filter-out %env.sh %template, $(wildcard etc/restic/*))
 SRCS_SYSTEMD	= $(wildcard etc/systemd/system/*)
 
 # Just set PREFIX in envionment, like
@@ -30,14 +30,12 @@ install-scripts:
 	install -d $(DEST_SCRIPTS)
 	install -m 0744 $(SRCS_SCRIPTS) $(DEST_SCRIPTS)
 
-etc/restic/b2_env.sh:
-	install -m 0600 etc/restic/env.sh.template etc/restic/env.sh
-
 # target: install-conf - Install restic configuration files.
-# will create these files locally only if they don't already exist
-install-conf: | etc/restic/env.sh
+# Creates env.sh from the template only when the destination does not exist.
+install-conf:
 	install -d $(DEST_CONF)
 	install -m 0600 $(SRCS_CONF) $(DEST_CONF)
+	test -f $(DEST_CONF)/env.sh || install -m 0600 etc/restic/env.sh.template $(DEST_CONF)/env.sh
 
 # target: install-systemd - Install systemd timer and service files
 install-systemd:
